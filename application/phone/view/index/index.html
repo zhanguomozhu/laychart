@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <title>ichat 移动版</title>
+    <link rel="stylesheet" href="__COMMON__/layui/css/layui.mobile.css">
+    <link id="layuicss-skinlayim-mobilecss" rel="stylesheet" href="__COMMON__/layui/css/modules/layim/mobile/layim.css?v=2.0" media="all">
+</head>
+<body>
+<script src="__COMMON__/layui/layui.js"></script>
+<script>
+    var userlist = {$userlist};
+    console.log(userlist)
+    var uid     = "{$uinfo.id}";
+    var uname   = "{$uinfo.username}";
+    var avatar  = "{$uinfo.avatar}";
+    var sign    = "{$uinfo.sign}";
+    var socket;
+    layui.use('mobile', function(){
+        var mobile = layui.mobile
+                ,layim = mobile.layim
+                ,layer = mobile.layer;
+
+        layim.config({
+            //上传图片接口
+            uploadImage: {
+                url: '/upload/image' //（返回的数据格式见下文）
+                ,type: '' //默认post
+            }
+
+            //上传文件接口
+            ,uploadFile: {
+                url: '/upload/file' //（返回的数据格式见下文）
+                ,type: '' //默认post
+            }
+
+            ,init: userlist
+
+            //扩展更多列表
+            ,moreList: [{
+                alias: 'find'
+                ,title: '发现'
+                ,iconUnicode: '&#xe628;' //图标字体的unicode，可不填
+                ,iconClass: '' //图标字体的class类名
+            },{
+                alias: 'share'
+                ,title: '分享与邀请'
+                ,iconUnicode: '&#xe641;' //图标字体的unicode，可不填
+                ,iconClass: '' //图标字体的class类名
+            }]
+
+            ,isNewFriend: false //是否开启“新的朋友”
+            ,isgroup: true //是否开启“群聊”
+            ,chatTitleColor: '#c00' //顶部Bar颜色
+            ,title: 'LayIM' //应用名，默认：我的IM
+        });
+
+
+        socket = new WebSocket('ws://127.0.0.1:8282');
+        // 连接发生错误的回调方法
+        socket.onerror = function () {
+            layer.msg('连接失败');
+        };
+
+        //连接成功时触发
+        socket.onopen = function(){
+            // 登录
+            var login_data = '{"type":"init","id":"' + uid + '", "username":"' + uname + '", "avatar":"' + avatar + '", "sign":"' + sign + '"}';
+            socket.send( login_data );
+            layer.msg('连接成功');
+        };
+
+        //监听收到的消息
+        socket.onmessage = function(res){
+            //console.log(res.data);
+            var data = eval("("+res.data+")");
+            switch(data['message_type']){
+                // 服务端ping客户端
+                case 'ping':
+                    //console.log(data);
+                    socket.send('{"type":"ping"}');
+                    break;
+                // 在线
+                case 'online':
+                    layim.setFriendStatus(data.id, 'online');
+                    break;
+                // 下线
+                case 'offline':
+                    layim.setFriendStatus(data.id, 'offline');
+                    break;
+                // 检测聊天数据
+                case 'chatMessage':
+                    //console.log(data.data);
+                    layim.getMessage(data.data);
+                    break;
+                // 离线消息推送
+                case 'logMessage':
+                    setTimeout(function(){layim.getMessage(data.data)}, 1000);
+                    break;
+                // 用户退出 更新用户列表
+                case 'logout':
+                    layim.setFriendStatus(data.id, 'offline');
+                    break;
+            }
+        };
+
+        //监听发送消息
+        layim.on('sendMessage', function(data){
+            var mine = JSON.stringify(data.mine);
+            var to = JSON.stringify(data.to);
+            var login_data = '{"type":"chatMessage","data":{"mine":'+mine+', "to":'+to+'}}';
+            socket.send( login_data );
+        });
+    });
+   
+</script>
+
+</body>
+</html>
